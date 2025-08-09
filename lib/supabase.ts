@@ -45,6 +45,11 @@ export const eventStorage = {
     }
   },
 
+  // Alias for storeEvent for consistency
+  async createEvent(event: SupabaseEvent) {
+    return this.storeEvent(event);
+  },
+
   // Get all events (faster than blockchain queries)
   async getAllEvents() {
     try {
