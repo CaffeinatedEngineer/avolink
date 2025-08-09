@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if contract address is configured
-    if (EVENT_TICKET_CONTRACT_ADDRESS === "0x...") {
+    if (!EVENT_TICKET_CONTRACT_ADDRESS || EVENT_TICKET_CONTRACT_ADDRESS.includes('0x...')) {
       return NextResponse.json(
         { 
           success: false, 
@@ -88,9 +88,9 @@ export async function POST(request: NextRequest) {
       let isEventActive = true;
       
       try {
-        const eventData = await eventManagerContract.getEvent(eventId);
-        eventName = eventData[0];
-        isEventActive = eventData[7];
+        const eventData = await eventManagerContract.getEvent(eventId.toString()) as any;
+        eventName = eventData[0] || eventName;
+        isEventActive = eventData[7] !== false;
       } catch {
         console.log(`Could not load event ${eventId} details`);
       }
