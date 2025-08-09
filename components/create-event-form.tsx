@@ -121,10 +121,11 @@ export function CreateEventForm({ onEventCreated }: CreateEventFormProps) {
       
       const eventId = await createEvent(
         data.name,
-        data.description,
-        data.ticketPrice,
+        `${data.date} ${data.time}`, // Combine date and time
+        data.location,
         parseInt(data.maxTickets),
-        metadataURI
+        data.ticketPrice,
+        3 // Default resale limit
       );
 
       form.reset();
