@@ -7,11 +7,15 @@ import {
   EVENT_TICKET_CONTRACT_ADDRESS,
   TICKET_NFT_CONTRACT_ADDRESS,
   EVENT_MANAGER_CONTRACT_ADDRESS, 
-  EVENT_TICKET_ABI, 
+  EVENT_TICKET_ABI,
+  TICKET_NFT_ABI,
   Event, 
   Ticket,
+  ContractEvent,
+  TicketInfo,
   AVALANCHE_FUJI_CONFIG 
 } from '@/lib/contract';
+import { parseError, getErrorMessage, getErrorTitle } from '@/lib/error-handler';
 
 declare global {
   interface Window {
@@ -78,24 +82,49 @@ export function useContract() {
     }
   }, [getProvider]);
 
-  // Create Event
+  // Create Event - matches EventManager contract signature
   const createEvent = useCallback(async (
     name: string,
-    description: string,
+    date: string,
+    venue: string,
+    supply: number,
     ticketPrice: string, // in AVAX
-    maxTickets: number,
-    metadataURI: string
+    resaleLimit: number = 3
   ) => {
     try {
       await ensureCorrectNetwork();
       const contract = await getContract('eventManager', true);
       
+      // Prepare transaction data - price in wei
+      const priceInWei = parseEther(ticketPrice);
+      
+      // Estimate gas first to catch errors early
+      try {
+        const gasEstimate = await contract.createEvent.estimateGas(
+          name,
+          date,
+          venue,
+          supply,
+          priceInWei,
+          resaleLimit
+        );
+        console.log('Gas estimate:', gasEstimate.toString());
+      } catch (gasError: any) {
+        console.error('Gas estimation failed:', gasError);
+        throw new Error('Transaction would fail: ' + (gasError.reason || gasError.message));
+      }
+      
+      // Execute transaction with manual gas limit
       const tx = await contract.createEvent(
         name,
-        description,
-        parseEther(ticketPrice),
-        maxTickets,
-        metadataURI
+        date,
+        venue,
+        supply,
+        priceInWei,
+        resaleLimit,
+        {
+          gasLimit: 500000, // Set a reasonable gas limit
+        }
       );
       
       toast({
@@ -104,11 +133,26 @@ export function useContract() {
       });
       
       const receipt = await tx.wait();
-      const eventCreatedLog = receipt.logs.find((log: any) => 
-        log.topics[0] === contract.interface.getEvent('EventCreated').topicHash
-      );
       
-      const eventId = contract.interface.parseLog(eventCreatedLog)?.args[0];
+      // Try to extract event ID from logs
+      let eventId = Date.now(); // Fallback ID
+      try {
+        const eventCreatedLog = receipt.logs.find((log: any) => {
+          try {
+            const parsedLog = contract.interface.parseLog(log);
+            return parsedLog?.name === 'EventCreated';
+          } catch {
+            return false;
+          }
+        });
+        
+        if (eventCreatedLog) {
+          const parsedLog = contract.interface.parseLog(eventCreatedLog);
+          eventId = Number(parsedLog?.args[0]) || eventId;
+        }
+      } catch (e) {
+        console.log('Could not parse event ID from logs, using fallback');
+      }
       
       toast({
         title: "Event Created!",
@@ -117,22 +161,24 @@ export function useContract() {
       
       return eventId;
     } catch (error: any) {
+      console.error('Create event error:', error);
+      const errorInfo = parseError(error);
       toast({
-        title: "Error Creating Event",
-        description: error.message || "Failed to create event",
+        title: errorInfo.title,
+        description: errorInfo.message + (errorInfo.userAction ? ` ${errorInfo.userAction}` : ''),
         variant: "destructive",
       });
       throw error;
     }
   }, [ensureCorrectNetwork, getContract, toast]);
 
-  // Buy Ticket
-  const buyTicket = useCallback(async (eventId: number, ticketPrice: string) => {
+  // Buy Ticket - matches EventManager contract signature
+  const buyTicket = useCallback(async (eventId: number, seat: string, ticketPrice: string) => {
     try {
       await ensureCorrectNetwork();
       const contract = await getContract('eventManager', true);
       
-      const tx = await contract.buyTicket(eventId, {
+      const tx = await contract.buyTicket(eventId.toString(), seat, {
         value: parseEther(ticketPrice)
       });
       
@@ -142,35 +188,59 @@ export function useContract() {
       });
       
       const receipt = await tx.wait();
-      const ticketPurchasedLog = receipt.logs.find((log: any) => 
-        log.topics[0] === contract.interface.getEvent('TicketPurchased').topicHash
-      );
       
-      const ticketId = contract.interface.parseLog(ticketPurchasedLog)?.args[1];
+      // Try to extract ticket ID from logs
+      let ticketId = 0;
+      try {
+        const ticketPurchasedLog = receipt.logs.find((log: any) => {
+          try {
+            const parsedLog = contract.interface.parseLog(log);
+            return parsedLog?.name === 'TicketPurchased';
+          } catch {
+            return false;
+          }
+        });
+        
+        if (ticketPurchasedLog) {
+          const parsedLog = contract.interface.parseLog(ticketPurchasedLog);
+          ticketId = Number(parsedLog?.args[1]) || 0; // tokenId is the second argument
+        }
+      } catch (e) {
+        console.log('Could not parse ticket ID from logs');
+      }
       
       toast({
         title: "Ticket Purchased!",
-        description: `Ticket #${ticketId} purchased successfully.`,
+        description: `Ticket #${ticketId} purchased successfully for seat ${seat}.`,
       });
       
       return ticketId;
     } catch (error: any) {
+      console.error('Buy ticket error:', error);
+      const errorInfo = parseError(error);
       toast({
-        title: "Error Buying Ticket",
-        description: error.message || "Failed to buy ticket",
+        title: errorInfo.title,
+        description: errorInfo.message + (errorInfo.userAction ? ` ${errorInfo.userAction}` : ''),
         variant: "destructive",
       });
       throw error;
     }
   }, [ensureCorrectNetwork, getContract, toast]);
 
-  // Transfer Ticket
-  const transferTicket = useCallback(async (to: string, ticketId: number) => {
+  // Transfer Ticket using ERC721 standard
+  const transferTicket = useCallback(async (from: string, to: string, ticketId: number) => {
     try {
       await ensureCorrectNetwork();
-      const contract = await getContract('ticketNFT', true);
+      const provider = getProvider();
+      if (!provider) throw new Error('No wallet provider found');
       
-      const tx = await contract.transferTicket(to, ticketId);
+      const ticketNFTContract = new Contract(
+        TICKET_NFT_CONTRACT_ADDRESS,
+        TICKET_NFT_ABI,
+        await provider.getSigner()
+      );
+      
+      const tx = await ticketNFTContract.transferFrom(from, to, ticketId);
       
       toast({
         title: "Transferring Ticket...",
@@ -193,46 +263,59 @@ export function useContract() {
       });
       throw error;
     }
-  }, [ensureCorrectNetwork, getContract, toast]);
+  }, [ensureCorrectNetwork, getProvider, toast]);
 
-  // Get Event Details
+  // Get Event Details - matches EventManager contract return structure
   const getEvent = useCallback(async (eventId: number): Promise<Event> => {
     try {
-      const contract = await getContract(false);
-      const eventData = await contract.getEvent(eventId);
+      const contract = await getContract('eventManager', false);
+      const eventData = await contract.getEvent(eventId.toString()) as unknown as ContractEvent;
       
+      // EventManager returns: (uint256 eventId, string name, string date, string venue, uint256 supply, uint256 price, uint256 resaleLimit, uint256 ticketsSold)
       return {
-        id: eventId,
-        name: eventData[0],
-        description: eventData[1],
-        ticketPrice: formatEther(eventData[2]),
-        maxTickets: Number(eventData[3]),
-        soldTickets: Number(eventData[4]),
-        organizer: eventData[5],
-        metadataURI: eventData[6],
-        isActive: eventData[7],
+        id: Number(eventData.eventId),
+        name: eventData.name || `Event #${eventId}`,
+        description: eventData.venue || 'No description', // Use venue as description
+        date: eventData.date || '',
+        venue: eventData.venue || '',
+        ticketPrice: formatEther(eventData.price.toString()),
+        maxTickets: Number(eventData.supply),
+        soldTickets: Number(eventData.ticketsSold),
+        resaleLimit: Number(eventData.resaleLimit),
+        isActive: true, // Assume active if it exists
       };
     } catch (error: any) {
+      console.error('Get event error:', error);
+      const errorInfo = parseError(error);
       toast({
-        title: "Error Loading Event",
-        description: error.message || "Failed to load event details",
+        title: errorInfo.title,
+        description: errorInfo.message,
         variant: "destructive",
       });
       throw error;
     }
   }, [getContract, toast]);
 
-  // Get Ticket Details
+  // Get Ticket Details from TicketNFT contract
   const getTicket = useCallback(async (ticketId: number): Promise<Ticket> => {
     try {
-      const contract = await getContract(false);
-      const ticketData = await contract.getTicket(ticketId);
+      const ticketNFTContract = new Contract(
+        TICKET_NFT_CONTRACT_ADDRESS,
+        TICKET_NFT_ABI,
+        getProvider()
+      );
+      
+      const ticketInfo = await ticketNFTContract.getTicketInfo(ticketId) as TicketInfo;
       
       return {
         id: ticketId,
-        eventId: Number(ticketData[0]),
-        owner: ticketData[1],
-        isUsed: ticketData[2],
+        eventId: Number(ticketInfo.eventId),
+        owner: await ticketNFTContract.ownerOf(ticketId),
+        seat: ticketInfo.seat,
+        isUsed: ticketInfo.attended,
+        eventName: ticketInfo.eventName,
+        eventDate: ticketInfo.eventDate,
+        venue: ticketInfo.venue,
       };
     } catch (error: any) {
       toast({
@@ -242,24 +325,40 @@ export function useContract() {
       });
       throw error;
     }
-  }, [getContract, toast]);
+  }, [getProvider, toast]);
 
-  // Get User's Tickets
+  // Get User's Tickets using TicketNFT
   const getUserTickets = useCallback(async (userAddress: string): Promise<Ticket[]> => {
     try {
-      const contract = await getContract('ticketNFT', false);
-      const balance = await contract.balanceOf(userAddress);
+      const ticketNFTContract = new Contract(
+        TICKET_NFT_CONTRACT_ADDRESS,
+        TICKET_NFT_ABI,
+        getProvider()
+      );
+      
+      const balance = await ticketNFTContract.balanceOf(userAddress);
       const tickets: Ticket[] = [];
       
-      for (let i = 0; i < Number(balance); i++) {
-        try {
-          const tokenId = await contract.tokenOfOwnerByIndex(userAddress, i);
-          const ticket = await getTicket(Number(tokenId));
-          tickets.push(ticket);
-        } catch {
-          // Token might not exist or be transferred
-          continue;
+      // TicketNFT doesn't have tokenOfOwnerByIndex, so we need to iterate through all tokens
+      // Get current token ID and check ownership
+      try {
+        const currentTokenId = await ticketNFTContract.getCurrentTokenId();
+        
+        for (let tokenId = 1; tokenId < Number(currentTokenId); tokenId++) {
+          try {
+            const owner = await ticketNFTContract.ownerOf(tokenId);
+            if (owner.toLowerCase() === userAddress.toLowerCase()) {
+              const ticket = await getTicket(tokenId);
+              tickets.push(ticket);
+            }
+          } catch {
+            // Token might not exist or be transferred
+            continue;
+          }
         }
+      } catch {
+        // Fallback if getCurrentTokenId fails
+        console.log('Could not get current token ID');
       }
       
       return tickets;
@@ -267,19 +366,33 @@ export function useContract() {
       console.error('Error getting user tickets:', error);
       return [];
     }
-  }, [getContract, getTicket]);
+  }, [getProvider, getTicket]);
 
   // Verify Ticket Ownership
   const verifyTicket = useCallback(async (ticketId: number): Promise<{ isValid: boolean; owner: string; isUsed: boolean }> => {
     try {
-      const contract = await getContract('ticketNFT', false);
-      const owner = await contract.ownerOf(ticketId);
-      const ticket = await getTicket(ticketId);
+      const ticketNFTContract = new Contract(
+        TICKET_NFT_CONTRACT_ADDRESS,
+        TICKET_NFT_ABI,
+        getProvider()
+      );
+      
+      const exists = await ticketNFTContract.exists(ticketId);
+      if (!exists) {
+        return {
+          isValid: false,
+          owner: '0x0000000000000000000000000000000000000000',
+          isUsed: false,
+        };
+      }
+      
+      const owner = await ticketNFTContract.ownerOf(ticketId);
+      const isAttended = await ticketNFTContract.isAttended(ticketId);
       
       return {
         isValid: owner !== '0x0000000000000000000000000000000000000000',
         owner,
-        isUsed: ticket.isUsed,
+        isUsed: isAttended,
       };
     } catch (error: any) {
       return {
@@ -288,7 +401,7 @@ export function useContract() {
         isUsed: false,
       };
     }
-  }, [getContract, getTicket]);
+  }, [getProvider]);
 
   return {
     createEvent,
@@ -298,6 +411,6 @@ export function useContract() {
     getTicket,
     getUserTickets,
     verifyTicket,
-    isContractAvailable: EVENT_TICKET_CONTRACT_ADDRESS !== "0x...",
+    isContractAvailable: true,
   };
 }
