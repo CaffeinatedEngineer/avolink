@@ -268,7 +268,7 @@ export function QRScannerDemo() {
                       <span className="text-white font-medium">
                         {result.verification ? `Ticket #${result.verification.ticketId}` : "Unknown Ticket"}
                       </span>
-                      <Badge variant={getStatusColor(result)} size="sm">
+                      <Badge variant={getStatusColor(result)}>
                         {result.message}
                       </Badge>
                     </div>
