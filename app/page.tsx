@@ -29,14 +29,14 @@ export default function Page() {
       <SmoothScrollHeader />
 
       {/* Global engagement progress */}
-      <section className="mx-auto max-w-6xl px-6 pt-20">
+      <section className="mx-auto max-w-6xl px-6 pt-24">
         <AnimatedSection animation="reveal-up" delay={100}>
           <EngagementProgress />
         </AnimatedSection>
       </section>
 
       {/* Hero */}
-      <section className="mx-auto max-w-6xl px-6 pt-10 md:pt-16">
+      <section className="mx-auto max-w-6xl px-6 pt-12 md:pt-16">
         <div className="flex flex-col items-start gap-8">
           <AnimatedSection animation="reveal-scale" delay={0}>
             <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/80 backdrop-blur">
