@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useUser } from '@clerk/nextjs'
+import { useUser, useClerk } from '@clerk/nextjs'
 import { redirect } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { CalendarDays, Users, Ticket, TrendingUp, Plus, Wallet, Sparkles, Zap, Shield, Activity } from 'lucide-react'
+import { CalendarDays, Users, Ticket, TrendingUp, Plus, Wallet, Sparkles, Zap, Shield, Activity, LogOut } from 'lucide-react'
 
 import WalletConnect from '@/components/wallet-connect'
 import { EventMarketplaceEnhanced as EventMarketplace } from "@/components/event-marketplace-enhanced";
@@ -62,30 +62,40 @@ function DashboardCard({ title, value, description, icon: Icon, trend }: {
   trend?: string
 }) {
   return (
-    <Card className="border border-white/10 bg-white/5 backdrop-blur">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-white/80">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-[#E84142]" />
+    <Card className="group relative overflow-hidden border border-white/20 bg-black/90 backdrop-blur-md hover:shadow-xl hover:shadow-[#E84142]/10 hover:border-[#E84142]/30 transition-all duration-500">
+      {/* Subtle animated background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#E84142]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      
+      <CardHeader className="relative z-10 flex flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="text-sm font-medium text-white/80 group-hover:text-white transition-colors duration-300">{title}</CardTitle>
+        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#E84142]/20 group-hover:bg-[#E84142]/30 transition-colors duration-300">
+          <Icon className="h-5 w-5 text-[#E84142] group-hover:scale-110 transition-transform duration-300" />
+        </div>
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold text-white">{value}</div>
-        <p className="text-xs text-white/60 flex items-center gap-2">
+      <CardContent className="relative z-10">
+        <div className="text-3xl font-bold text-white mb-2 group-hover:text-[#E84142] transition-colors duration-300">{value}</div>
+        <p className="text-sm text-white/70 flex items-center gap-2 group-hover:text-white/90 transition-colors duration-300">
           {description}
           {trend && (
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="secondary" className="text-xs bg-white/10 text-white/80 border-white/20">
               {trend}
             </Badge>
           )}
         </p>
       </CardContent>
+      
+      {/* Bottom accent line */}
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-[#E84142] to-pink-500 scale-x-0 group-hover:scale-x-100 transition-transform duration-500" />
     </Card>
   )
 }
 
 export default function Dashboard() {
   const { isSignedIn, user } = useUser()
+  const { signOut } = useClerk()
   const walletAddress = useWalletAddress()
   const [activeTab, setActiveTab] = useState('marketplace')
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   if (!isSignedIn) {
     redirect('/sign-in')
@@ -94,6 +104,15 @@ export default function Dashboard() {
   const handleEventCreated = () => {
     // Switch to marketplace tab to see the newly created event
     setActiveTab('marketplace')
+  }
+
+  const handleSignOut = async () => {
+    setIsLoggingOut(true)
+    try {
+      await signOut()
+    } finally {
+      setIsLoggingOut(false)
+    }
   }
 
   return (
@@ -106,7 +125,7 @@ export default function Dashboard() {
         <div className="absolute top-1/3 left-[-10%] h-[24rem] w-[24rem] rounded-full bg-emerald-500/10 blur-[120px]" />
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-12">
+      <div className="max-w-7xl mx-auto px-6 pt-24 pb-8 space-y-12">
         {/* Hero Header Section */}
         <AnimatedSection animation="reveal-up" delay={0}>
           <div className="text-center space-y-6">
@@ -142,12 +161,22 @@ export default function Dashboard() {
                 <Activity className="h-3 w-3" />
                 Fuji testnet • near‑zero gas
               </div>
+              <Button 
+                onClick={handleSignOut}
+                disabled={isLoggingOut}
+                variant="outline"
+                size="sm"
+                className="rounded-full border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+              >
+                <LogOut className="h-3 w-3 mr-2" />
+                {isLoggingOut ? 'Signing out...' : 'Sign Out'}
+              </Button>
             </div>
           </div>
         </AnimatedSection>
 
         {!walletAddress && (
-          <Card className="border border-[#E84142]/20 bg-[#E84142]/5 backdrop-blur">
+          <Card className="border border-[#E84142]/20 bg-black/90 backdrop-blur">
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
                 <Wallet className="h-8 w-8 text-[#E84142]" />
@@ -193,33 +222,43 @@ export default function Dashboard() {
         </AnimatedSection>
 
         {/* Main Content Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 bg-white/10 backdrop-blur">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+          <TabsList className="grid w-full grid-cols-4 bg-black/80 backdrop-blur-md border border-white/20 rounded-xl p-1 h-auto">
             <TabsTrigger 
               value="marketplace" 
-              className="data-[state=active]:bg-[#E84142] data-[state=active]:text-white"
+              className="relative flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium text-white/70 transition-all duration-300 ease-in-out rounded-lg hover:text-white hover:bg-white/5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#E84142] data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-[#E84142]/25"
             >
-              Marketplace
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Marketplace</span>
+              <span className="sm:hidden">Market</span>
             </TabsTrigger>
             <TabsTrigger 
               value="tickets" 
-              className="data-[state=active]:bg-[#E84142] data-[state=active]:text-white"
+              className="relative flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium text-white/70 transition-all duration-300 ease-in-out rounded-lg hover:text-white hover:bg-white/5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#E84142] data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-[#E84142]/25 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!walletAddress}
             >
-              My Tickets
+              <Ticket className="h-4 w-4" />
+              <span className="hidden sm:inline">My Tickets</span>
+              <span className="sm:hidden">Tickets</span>
+              {!walletAddress && <div className="absolute -top-1 -right-1 h-2 w-2 bg-orange-400 rounded-full animate-pulse" />}
             </TabsTrigger>
             <TabsTrigger 
               value="create" 
-              className="data-[state=active]:bg-[#E84142] data-[state=active]:text-white"
+              className="relative flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium text-white/70 transition-all duration-300 ease-in-out rounded-lg hover:text-white hover:bg-white/5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#E84142] data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-[#E84142]/25 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!walletAddress}
             >
-              Create Event
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Create Event</span>
+              <span className="sm:hidden">Create</span>
+              {!walletAddress && <div className="absolute -top-1 -right-1 h-2 w-2 bg-orange-400 rounded-full animate-pulse" />}
             </TabsTrigger>
             <TabsTrigger 
               value="verify" 
-              className="data-[state=active]:bg-[#E84142] data-[state=active]:text-white"
+              className="relative flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium text-white/70 transition-all duration-300 ease-in-out rounded-lg hover:text-white hover:bg-white/5 data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#E84142] data-[state=active]:to-pink-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-[#E84142]/25"
             >
-              Verify Tickets
+              <Shield className="h-4 w-4" />
+              <span className="hidden sm:inline">Verify Tickets</span>
+              <span className="sm:hidden">Verify</span>
             </TabsTrigger>
           </TabsList>
 
