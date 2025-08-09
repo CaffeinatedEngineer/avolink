@@ -90,21 +90,57 @@ export function useContractSafe() {
     }
   }, []);
 
-  // Create Event with fallback options
+  // Create Event - matches EventManager contract signature
   const createEvent = useCallback(async (
     name: string,
-    description: string,
+    date: string,
+    venue: string,
+    supply: number,
     ticketPrice: string,
-    maxTickets: number
+    resaleLimit: number = 3
   ) => {
     try {
       await ensureCorrectNetwork();
       const contract = await getContract('eventManager', true);
       
-      // Try different function signatures
+      const priceInWei = parseEther(ticketPrice);
+      
+      // Use explicit function signatures to avoid ambiguity
       const functionVariations = [
-        () => contract.createEvent(name, description, parseEther(ticketPrice), maxTickets), // 4 parameters
-        () => contract.createEvent(name, description, parseEther(ticketPrice), maxTickets, ""), // with empty metadata
+        // Try EventManager signature: name, date, venue, supply, price, resaleLimit
+        async () => {
+          const tx = await contract.createEvent(
+            name, 
+            date, 
+            venue, 
+            supply,
+            priceInWei, 
+            resaleLimit
+          );
+          return tx;
+        },
+        // Try with string function signature
+        async () => {
+          const tx = await contract['createEvent(string,string,string,uint256,uint256,uint256)'](
+            name, 
+            date, 
+            venue,
+            supply,
+            priceInWei, 
+            resaleLimit
+          );
+          return tx;
+        },
+        // Fallback with simplified parameters
+        async () => {
+          const tx = await contract.createEvent(
+            name, 
+            venue, 
+            priceInWei, 
+            supply
+          );
+          return tx;
+        }
       ];
 
       let tx;
@@ -113,10 +149,12 @@ export function useContractSafe() {
       for (const variation of functionVariations) {
         try {
           tx = await variation();
+          console.log('Successfully called createEvent with variation');
           break;
         } catch (error: any) {
           lastError = error;
           console.log(`Function variation failed: ${error.message}`);
+          continue;
         }
       }
 
@@ -136,13 +174,14 @@ export function useContractSafe() {
       try {
         const eventCreatedLog = receipt.logs.find((log: any) => 
           log.topics.length > 0 && (
-            log.topics[0] === contract.interface.getEvent('EventCreated').topicHash ||
+            (contract.interface.getEvent('EventCreated')?.topicHash && log.topics[0] === contract.interface.getEvent('EventCreated')?.topicHash) ||
             log.address.toLowerCase() === EVENT_MANAGER_CONTRACT_ADDRESS.toLowerCase()
           )
         );
         
         if (eventCreatedLog) {
-          eventId = contract.interface.parseLog(eventCreatedLog)?.args[0] || eventId;
+          const parsedLog = contract.interface.parseLog(eventCreatedLog);
+          eventId = Number(parsedLog?.args[0]) || eventId;
         }
       } catch (e) {
         console.log('Could not parse event ID from logs, using fallback');
@@ -182,6 +221,7 @@ export function useContractSafe() {
                 id: Number(tokenId),
                 eventId: 1, // Default
                 owner: userAddress,
+                seat: `SEAT-${tokenId}`, // Default seat
                 isUsed: false,
               });
             } catch {
@@ -209,55 +249,30 @@ export function useContractSafe() {
     }
   }, [getContract]);
 
-  // Safe event retrieval
+  // Safe event retrieval - matches EventManager contract structure
   const getEvent = useCallback(async (eventId: number): Promise<Event | null> => {
     try {
       const contract = await getContract('eventManager', false);
+      const eventData = await contract.getEvent(eventId.toString()) as any;
       
-      // Try different function names and signatures
-      const methods = [
-        () => contract.getEvent(eventId),
-        () => contract.events(eventId),
-      ];
-
-      for (const method of methods) {
-        try {
-          const eventData = await method();
-          
-          // Handle both tuple and array returns
-          const parseEventData = (data: any) => {
-            if (Array.isArray(data)) {
-              return {
-                id: eventId,
-                name: data[0] || `Event #${eventId}`,
-                description: data[1] || 'No description',
-                ticketPrice: formatEther(data[2] || '0'),
-                maxTickets: Number(data[3] || 0),
-                soldTickets: Number(data[4] || 0),
-                organizer: data[5] || '0x0000000000000000000000000000000000000000',
-                metadataURI: data[6] || '',
-                isActive: data[7] !== false,
-              };
-            }
-            return {
-              id: eventId,
-              name: data.name || `Event #${eventId}`,
-              description: data.description || 'No description',
-              ticketPrice: formatEther(data.ticketPrice || '0'),
-              maxTickets: Number(data.maxTickets || 0),
-              soldTickets: Number(data.soldTickets || 0),
-              organizer: data.organizer || '0x0000000000000000000000000000000000000000',
-              metadataURI: data.metadataURI || '',
-              isActive: data.isActive !== false,
-            };
-          };
-
-          return parseEventData(eventData);
-        } catch (error) {
-          console.log(`Event retrieval method failed: ${error}`);
-        }
+      // EventManager returns: (uint256 eventId, string name, string date, string venue, uint256 supply, uint256 price, uint256 resaleLimit, uint256 ticketsSold)
+      if (eventData && (eventData.eventId || eventData[0])) {
+        return {
+          id: Number(eventData.eventId || eventData[0]),
+          name: eventData.name || eventData[1] || `Event #${eventId}`,
+          description: eventData.venue || eventData[3] || 'No description', // Use venue as description
+          date: eventData.date || eventData[2] || '',
+          venue: eventData.venue || eventData[3] || '',
+          ticketPrice: formatEther((eventData.price || eventData[5]).toString()),
+          maxTickets: Number(eventData.supply || eventData[4]),
+          soldTickets: Number(eventData.ticketsSold || eventData[7]),
+          resaleLimit: Number(eventData.resaleLimit || eventData[6]),
+          organizer: '0x0000000000000000000000000000000000000000', // Not returned by contract
+          metadataURI: '',
+          isActive: true, // Assume active if it exists
+        };
       }
-
+      
       return null;
     } catch (error: any) {
       console.error('Error loading event:', error);
@@ -265,13 +280,17 @@ export function useContractSafe() {
     }
   }, [getContract]);
 
-  // Simplified buy ticket function
-  const buyTicket = useCallback(async (eventId: number, ticketPrice: string) => {
+  // Buy ticket function - matches EventManager signature
+  const buyTicket = useCallback(async (eventId: number, seat: string, ticketPrice: string) => {
     try {
       await ensureCorrectNetwork();
       const contract = await getContract('eventManager', true);
       
       const methods = [
+        // Try EventManager signature: buyTicket(uint256 eventId, string seat)
+        () => contract.buyTicket(eventId.toString(), seat, { value: parseEther(ticketPrice) }),
+        () => contract.buyTicket(eventId, seat, { value: parseEther(ticketPrice) }),
+        // Fallback methods
         () => contract.buyTicket(eventId, { value: parseEther(ticketPrice) }),
         () => contract.purchaseTicket(eventId, { value: parseEther(ticketPrice) }),
       ];
@@ -296,11 +315,30 @@ export function useContractSafe() {
       });
       
       const receipt = await tx.wait();
-      const ticketId = Date.now(); // Fallback ID
+      
+      // Try to extract ticket ID from logs
+      let ticketId = Date.now(); // Fallback ID
+      try {
+        const ticketPurchasedLog = receipt.logs.find((log: any) => {
+          try {
+            const parsedLog = contract.interface.parseLog(log);
+            return parsedLog?.name === 'TicketPurchased';
+          } catch {
+            return false;
+          }
+        });
+        
+        if (ticketPurchasedLog) {
+          const parsedLog = contract.interface.parseLog(ticketPurchasedLog);
+          ticketId = Number(parsedLog?.args[1]) || ticketId; // tokenId is the second argument
+        }
+      } catch (e) {
+        console.log('Could not parse ticket ID from logs');
+      }
       
       toast({
         title: "Ticket Purchased!",
-        description: `Ticket #${ticketId} purchased successfully.`,
+        description: `Ticket #${ticketId} purchased successfully for seat ${seat}.`,
       });
       
       return ticketId;
