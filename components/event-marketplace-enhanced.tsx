@@ -17,7 +17,7 @@ interface EventMarketplaceProps {
 
 function EventCard({ event, onBuyTicket, isLoading, isFromSupabase }: {
   event: Event | SupabaseEvent;
-  onBuyTicket: (eventId: number, price: string) => Promise<void>;
+  onBuyTicket: (eventId: number, seat: string, price: string) => Promise<any>;
   isLoading: boolean;
   isFromSupabase?: boolean;
 }) {
@@ -26,7 +26,9 @@ function EventCard({ event, onBuyTicket, isLoading, isFromSupabase }: {
   const handleBuyTicket = async () => {
     try {
       setIsBuying(true);
-      await onBuyTicket(Number(event.id), event.ticketPrice || "0");
+      const ticketPrice = 'ticket_price' in event ? event.ticket_price : event.ticketPrice || "0";
+      const seat = `SEAT-${Date.now()}`; // Generate unique seat identifier
+      await onBuyTicket(Number(event.id), seat, ticketPrice);
     } finally {
       setIsBuying(false);
     }
@@ -39,7 +41,7 @@ function EventCard({ event, onBuyTicket, isLoading, isFromSupabase }: {
     description: event.description,
     ticketPrice: 'ticket_price' in event ? event.ticket_price : event.ticketPrice,
     maxTickets: 'max_tickets' in event ? event.max_tickets : event.maxTickets,
-    soldTickets: 'sold_tickets' in event ? (event.sold_tickets || 0) : event.soldTickets,
+    soldTickets: 'sold_tickets' in event ? (event.sold_tickets || 0) : (event as Event).soldTickets || 0,
     organizer: event.organizer,
     isActive: 'is_active' in event ? event.is_active : event.isActive,
     imageUrl: 'image_url' in event ? event.image_url : undefined,
@@ -52,95 +54,150 @@ function EventCard({ event, onBuyTicket, isLoading, isFromSupabase }: {
   const availableTickets = eventData.maxTickets - eventData.soldTickets;
 
   return (
-    <Card className="group hover:shadow-lg transition-all duration-300 border border-white/10 bg-gradient-to-br from-white/5 to-white/10 backdrop-blur">
-      <CardHeader className="pb-4">
+    <Card className="group relative overflow-hidden transition-all duration-500 ease-out border border-white/20 bg-gradient-to-br from-black/40 to-black/60 backdrop-blur-md hover:shadow-2xl hover:shadow-[#E84142]/20 hover:border-[#E84142]/30 hover:scale-[1.02]">
+      {/* Subtle glow effect on hover */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#E84142]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      
+      <CardHeader className="pb-4 relative z-10">
         {eventData.imageUrl && (
-          <div className="aspect-video rounded-lg overflow-hidden mb-4">
+          <div className="aspect-video rounded-xl overflow-hidden mb-4 border border-white/10">
             <img
               src={eventData.imageUrl}
               alt={eventData.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
             />
           </div>
         )}
         
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-lg text-white group-hover:text-[#E84142] transition-colors flex items-center gap-2">
-              {eventData.name}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-xl font-bold text-white group-hover:text-[#E84142] transition-colors duration-300 flex items-center gap-2 mb-2">
+              <span className="truncate">{eventData.name}</span>
               {isFromSupabase && (
-                <Badge variant="outline" className="text-xs border-blue-400 text-blue-400">
+                <Badge variant="outline" className="text-xs border-blue-400/50 text-blue-400 bg-blue-400/10 flex-shrink-0">
                   <Database className="h-3 w-3 mr-1" />
                   Cache
                 </Badge>
               )}
             </CardTitle>
-            <p className="text-white/70 text-sm mt-2 line-clamp-2">
+            <p className="text-white/80 text-sm leading-relaxed line-clamp-3">
               {eventData.description}
             </p>
           </div>
-          <Badge variant={eventData.isActive ? "default" : "secondary"} className="ml-2">
-            {eventData.isActive ? "Active" : "Inactive"}
+          <Badge 
+            variant={eventData.isActive ? "default" : "secondary"} 
+            className={`ml-2 flex-shrink-0 ${
+              eventData.isActive 
+                ? "bg-green-500/20 text-green-400 border-green-400/30" 
+                : "bg-gray-500/20 text-gray-400 border-gray-400/30"
+            }`}
+          >
+            <div className={`w-2 h-2 rounded-full mr-2 ${
+              eventData.isActive ? "bg-green-400 animate-pulse" : "bg-gray-400"
+            }`} />
+            {eventData.isActive ? "Live" : "Inactive"}
           </Badge>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5 relative z-10">
+        {/* Event Details */}
         {(eventData.date || eventData.time || eventData.location) && (
-          <div className="grid grid-cols-1 gap-3 text-sm">
-            {eventData.date && (
-              <div className="flex items-center gap-2 text-white/80">
-                <Calendar className="h-4 w-4 text-[#E84142]" />
-                <span>{eventData.date}</span>
-              </div>
-            )}
-            {eventData.time && (
-              <div className="flex items-center gap-2 text-white/80">
-                <Clock className="h-4 w-4 text-[#E84142]" />
-                <span>{eventData.time}</span>
-              </div>
-            )}
-            {eventData.location && (
-              <div className="flex items-center gap-2 text-white/80">
-                <MapPin className="h-4 w-4 text-[#E84142]" />
-                <span>{eventData.location}</span>
-              </div>
-            )}
+          <div className="bg-black/30 rounded-lg p-4 border border-white/10">
+            <div className="grid grid-cols-1 gap-3 text-sm">
+              {eventData.date && (
+                <div className="flex items-center gap-3 text-white/90">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#E84142]/30">
+                    <Calendar className="h-4 w-4 text-[#E84142]" />
+                  </div>
+                  <span className="font-medium">{eventData.date}</span>
+                </div>
+              )}
+              {eventData.time && (
+                <div className="flex items-center gap-3 text-white/90">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#E84142]/30">
+                    <Clock className="h-4 w-4 text-[#E84142]" />
+                  </div>
+                  <span className="font-medium">{eventData.time}</span>
+                </div>
+              )}
+              {eventData.location && (
+                <div className="flex items-center gap-3 text-white/90">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#E84142]/30">
+                    <MapPin className="h-4 w-4 text-[#E84142]" />
+                  </div>
+                  <span className="font-medium truncate">{eventData.location}</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2 text-white/70">
-            <Users className="h-4 w-4" />
-            <span>{availableTickets} / {eventData.maxTickets} available</span>
+        {/* Ticket Info */}
+        <div className="flex items-center justify-between p-4 bg-gradient-to-r from-black/30 to-black/40 rounded-lg border border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-500/20">
+              <Users className="h-5 w-5 text-blue-400" />
+            </div>
+            <div>
+              <div className="text-white font-semibold text-sm">{availableTickets} Available</div>
+              <div className="text-white/60 text-xs">of {eventData.maxTickets} total</div>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-[#E84142] font-semibold">
-            <Ticket className="h-4 w-4" />
-            <span>{eventData.ticketPrice} AVAX</span>
+          <div className="text-right">
+            <div className="flex items-center gap-2 text-[#E84142] font-bold text-lg">
+              <Ticket className="h-5 w-5" />
+              <span>{eventData.ticketPrice} AVAX</span>
+            </div>
+            <div className="text-white/60 text-xs mt-1">per ticket</div>
           </div>
         </div>
 
-        <div className="flex gap-3">
+        {/* Action Button */}
+        <div className="pt-2">
           <Button
             onClick={handleBuyTicket}
             disabled={isBuying || isEventFull || !eventData.isActive || isLoading}
-            className="flex-1 bg-[#E84142] hover:bg-[#E84142]/90 text-white"
+            className={`w-full h-12 text-white font-semibold transition-all duration-300 ${
+              isBuying
+                ? "bg-gray-600 cursor-not-allowed"
+                : isEventFull
+                ? "bg-gray-600 cursor-not-allowed"
+                : !eventData.isActive
+                ? "bg-gray-600 cursor-not-allowed"
+                : "bg-gradient-to-r from-[#E84142] to-pink-500 hover:from-[#E84142]/90 hover:to-pink-500/90 hover:shadow-lg hover:shadow-[#E84142]/30 hover:scale-[1.02]"
+            }`}
           >
             {isBuying ? (
-              "Buying..."
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white mr-2" />
+                Processing Transaction...
+              </>
             ) : isEventFull ? (
-              "Sold Out"
+              <>
+                <Ticket className="h-4 w-4 mr-2 opacity-50" />
+                Sold Out
+              </>
+            ) : !eventData.isActive ? (
+              <>
+                <Ticket className="h-4 w-4 mr-2 opacity-50" />
+                Event Inactive
+              </>
             ) : (
               <>
                 <ShoppingCart className="h-4 w-4 mr-2" />
-                Buy Ticket
+                Buy Ticket Now
               </>
             )}
           </Button>
         </div>
 
-        <div className="text-xs text-white/50 text-center">
-          Organizer: {eventData.organizer.slice(0, 6)}...{eventData.organizer.slice(-4)}
+        {/* Organizer Info */}
+        <div className="flex items-center justify-center gap-2 pt-2 text-xs text-white/60 border-t border-white/10">
+          <span>Organizer:</span>
+          <code className="bg-white/10 px-2 py-1 rounded text-white/80 font-mono">
+            {eventData.organizer ? `${eventData.organizer.slice(0, 6)}...${eventData.organizer.slice(-4)}` : 'Unknown'}
+          </code>
         </div>
       </CardContent>
     </Card>
@@ -149,17 +206,17 @@ function EventCard({ event, onBuyTicket, isLoading, isFromSupabase }: {
 
 function EventSkeleton() {
   return (
-    <Card className="border border-white/10 bg-white/5">
+    <Card className="border border-white/20 bg-gradient-to-br from-black/40 to-black/60 backdrop-blur-md">
       <CardHeader>
-        <Skeleton className="h-48 w-full rounded-lg bg-white/10" />
-        <Skeleton className="h-6 w-3/4 bg-white/10" />
-        <Skeleton className="h-4 w-full bg-white/10" />
+        <Skeleton className="h-48 w-full rounded-xl bg-black/40 border border-white/10" />
+        <Skeleton className="h-6 w-3/4 bg-black/50" />
+        <Skeleton className="h-4 w-full bg-black/50" />
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          <Skeleton className="h-4 w-1/2 bg-white/10" />
-          <Skeleton className="h-4 w-2/3 bg-white/10" />
-          <Skeleton className="h-10 w-full bg-white/10" />
+          <Skeleton className="h-4 w-1/2 bg-black/50" />
+          <Skeleton className="h-4 w-2/3 bg-black/50" />
+          <Skeleton className="h-12 w-full bg-black/50 rounded-lg" />
         </div>
       </CardContent>
     </Card>
@@ -198,7 +255,10 @@ export function EventMarketplaceEnhanced({ userAddress }: EventMarketplaceProps)
         // Try to load events with IDs 1-10 from blockchain
         for (let i = 1; i <= 10; i++) {
           blockchainPromises.push(
-            getEvent(i).catch(() => null)
+            getEvent(i).catch((error) => {
+              console.log(`Failed to load event ${i}:`, error.message);
+              return null;
+            })
           );
         }
 
@@ -237,19 +297,19 @@ export function EventMarketplaceEnhanced({ userAddress }: EventMarketplaceProps)
     }
   };
 
-  const handleBuyTicket = async (eventId: number, ticketPrice: string) => {
+  const handleBuyTicket = async (eventId: number, seat: string, ticketPrice: string) => {
     if (!userAddress) {
       throw new Error("Please connect your wallet first");
     }
 
-    const ticketId = await buyTicket(eventId, ticketPrice);
+    const ticketId = await buyTicket(eventId, seat, ticketPrice);
     
     // Update both local state and Supabase
     try {
       // Update local state
       setEvents(prev => prev.map(event => {
         if (Number(event.id) === eventId) {
-          const soldTickets = ('sold_tickets' in event ? event.sold_tickets : event.soldTickets) + 1;
+          const soldTickets = ('sold_tickets' in event ? (event.sold_tickets || 0) : ((event as Event).soldTickets || 0)) + 1;
           return 'sold_tickets' in event 
             ? { ...event, sold_tickets: soldTickets }
             : { ...event, soldTickets };
@@ -259,7 +319,7 @@ export function EventMarketplaceEnhanced({ userAddress }: EventMarketplaceProps)
 
       // Update Supabase cache
       await eventStorage.updateEvent(eventId.toString(), {
-        sold_tickets: events.find(e => Number(e.id) === eventId)?.['sold_tickets'] || 0 + 1
+        sold_tickets: (events.find(e => Number(e.id) === eventId) as any)?.sold_tickets || 0 + 1
       });
 
     } catch (error) {
@@ -287,18 +347,47 @@ export function EventMarketplaceEnhanced({ userAddress }: EventMarketplaceProps)
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+    <div className="space-y-8">
+      {/* Enhanced Header */}
+      <div className="text-center space-y-6">
+        <div className="flex justify-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-purple-400/20 bg-purple-400/10 px-4 py-2 text-sm text-purple-400 backdrop-blur">
+            <Users className="h-4 w-4" />
             Event Marketplace
+          </div>
+        </div>
+        
+        <div>
+          <h2 className="text-3xl font-bold text-white flex items-center justify-center gap-3 mb-2">
+            Discover Amazing Events
             {getDataSourceBadge()}
           </h2>
-          <p className="text-white/70">Discover and purchase tickets for amazing events</p>
+          <p className="text-white/70 max-w-2xl mx-auto text-lg">
+            Browse and purchase tickets for incredible events secured by blockchain technology. 
+            Each ticket is a unique NFT with proof of attendance.
+          </p>
         </div>
-        <Button onClick={loadEvents} variant="outline" disabled={isLoading}>
-          Refresh Events
-        </Button>
+        
+        <div className="flex justify-center">
+          <Button 
+            onClick={loadEvents} 
+            variant="outline" 
+            disabled={isLoading}
+            className="border-white/30 text-white hover:bg-white/10 hover:border-white/50 transition-all duration-300"
+          >
+            {isLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white mr-2" />
+                Loading Events...
+              </>
+            ) : (
+              <>
+                <Database className="h-4 w-4 mr-2" />
+                Refresh Events
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
