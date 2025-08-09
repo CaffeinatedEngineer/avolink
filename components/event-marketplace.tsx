@@ -16,7 +16,7 @@ interface EventMarketplaceProps {
 
 function EventCard({ event, onBuyTicket, isLoading }: {
   event: Event;
-  onBuyTicket: (eventId: number, price: string) => Promise<void>;
+  onBuyTicket: (eventId: number, seat: string, price: string) => Promise<any>;
   isLoading: boolean;
 }) {
   const [isBuying, setIsBuying] = useState(false);
@@ -24,7 +24,8 @@ function EventCard({ event, onBuyTicket, isLoading }: {
   const handleBuyTicket = async () => {
     try {
       setIsBuying(true);
-      await onBuyTicket(event.id, event.ticketPrice);
+      const seat = `SEAT-${Date.now()}`;
+      await onBuyTicket(event.id, seat, event.ticketPrice);
     } finally {
       setIsBuying(false);
     }
@@ -36,7 +37,7 @@ function EventCard({ event, onBuyTicket, isLoading }: {
   // Parse metadata if it's JSON
   let eventMetadata = null;
   try {
-    eventMetadata = JSON.parse(event.metadataURI);
+    eventMetadata = event.metadataURI ? JSON.parse(event.metadataURI) : {};
   } catch {
     // Not JSON, use as URL or ignore
   }
@@ -116,7 +117,7 @@ function EventCard({ event, onBuyTicket, isLoading }: {
         </div>
 
         <div className="text-xs text-white/50 text-center">
-          Organizer: {event.organizer.slice(0, 6)}...{event.organizer.slice(-4)}
+          Organizer: {event.organizer ? `${event.organizer.slice(0, 6)}...${event.organizer.slice(-4)}` : 'Unknown'}
         </div>
       </CardContent>
     </Card>
@@ -181,19 +182,21 @@ export function EventMarketplace({ userAddress }: EventMarketplaceProps) {
     }
   };
 
-  const handleBuyTicket = async (eventId: number, ticketPrice: string) => {
+  const handleBuyTicket = async (eventId: number, seat: string, ticketPrice: string) => {
     if (!userAddress) {
       throw new Error("Please connect your wallet first");
     }
 
-    const ticketId = await buyTicket(eventId, ticketPrice);
+    const ticketId = await buyTicket(eventId, seat, ticketPrice);
     
     // Refresh the specific event to update sold tickets count
     try {
       const updatedEvent = await getEvent(eventId);
-      setEvents(prev => prev.map(event => 
-        event.id === eventId ? updatedEvent : event
-      ));
+      if (updatedEvent) {
+        setEvents(prev => prev.map(event => 
+          event.id === eventId ? updatedEvent : event
+        ));
+      }
     } catch (error) {
       console.error("Failed to refresh event:", error);
     }
