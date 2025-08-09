@@ -7,21 +7,34 @@ import { cn } from "@/lib/utils"
 interface AnimatedSectionProps {
   children: ReactNode
   className?: string
-  animation?: "fade-up" | "fade-left" | "fade-right" | "scale-in" | "slide-in"
+  animation?: "fade-up" | "fade-left" | "fade-right" | "scale-in" | "slide-in" | "reveal-up" | "reveal-scale" | "reveal-left" | "reveal-right"
   delay?: number
   threshold?: number
+  stagger?: boolean
+  staggerDelay?: number
 }
 
 export default function AnimatedSection({
   children,
   className,
-  animation = "fade-up",
+  animation = "reveal-up",
   delay = 0,
-  threshold = 0.1,
+  threshold = 0.15,
+  stagger = false,
+  staggerDelay = 100,
 }: AnimatedSectionProps) {
-  const { ref, isVisible } = useScrollAnimation({ threshold })
+  const { ref, isVisible } = useScrollAnimation({ threshold, triggerOnce: true })
 
-  const getAnimationClass = () => {
+  const getAnimationClasses = () => {
+    const baseClass = animation
+    const revealedClass = isVisible ? "revealed" : ""
+    const staggerClass = stagger ? `stagger-delay-${Math.floor(delay / staggerDelay) + 1}` : ""
+    
+    return cn(baseClass, revealedClass, staggerClass)
+  }
+
+  // Legacy animation support
+  const getLegacyAnimationClass = () => {
     const baseClasses = "transition-all duration-800 ease-out"
     
     if (!isVisible) {
@@ -44,12 +57,15 @@ export default function AnimatedSection({
     return `${baseClasses} opacity-100 translate-y-0 translate-x-0 scale-100`
   }
 
+  const isNewAnimation = animation.startsWith('reveal-')
+  const animationClasses = isNewAnimation ? getAnimationClasses() : getLegacyAnimationClass()
+
   return (
     <div
       ref={ref as any}
-      className={cn(getAnimationClass(), className)}
+      className={cn(animationClasses, className)}
       style={{ 
-        transitionDelay: `${delay}ms`,
+        transitionDelay: isNewAnimation ? undefined : `${delay}ms`,
         willChange: 'transform, opacity'
       }}
     >
