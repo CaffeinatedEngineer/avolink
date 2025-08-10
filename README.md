@@ -4,7 +4,7 @@
 
 Avolink revolutionizes event ticketing by combining the security and transparency of blockchain technology with the speed and user experience of modern web applications. Built on the Avalanche network, Avolink ensures authentic, transferable, and verifiable event tickets while providing lightning-fast transactions and low fees.
 
-![Avolink Platform](https://via.placeholder.com/1200x600/0A0A0F/E84142?text=Avolink+Web3+Event+Platform)
+![Avolink Platform](https://avolink.netlify.app/)
 
 ## 🏔️ How Avalanche Powers Avolink
 
@@ -335,20 +335,12 @@ We welcome contributions to make Avolink the best Web3 event platform!
 - 📱 **Mobile responsiveness** and PWA features
 - 🔗 **Additional wallet integrations** 
 
-## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙋‍♂️ Support & Community
 
-### **Get Help**
-- 📧 **Email:** support@avolink.xyz
-- 💬 **Discord:** [Join our community](https://discord.gg/avolink)
-- 🐦 **Twitter:** [@AvolinkOfficial](https://twitter.com/AvolinkOfficial)
-- 📖 **Documentation:** [docs.avolink.xyz](https://docs.avolink.xyz)
 
 ### **Report Issues**
-Found a bug or have a suggestion? [Create an issue](https://github.com/yourusername/avolink/issues) on GitHub.
+Found a bug or have a suggestion? [Create an issue](https://github.com/CaffeinatedEngineer/avolink/issues) on GitHub.
 
 ---
 
@@ -358,11 +350,5 @@ Found a bug or have a suggestion? [Create an issue](https://github.com/yourusern
 
 ---
 
-### 🔗 Important Links
 
-- **Live Demo:** [https://avolink.vercel.app](https://avolink.vercel.app)
-- **Smart Contracts:** [Verified on Snowtrace](https://testnet.snowtrace.io/address/0x57e0f634c7cdb7c6696585fdc2b500c294711308)
-- **Avalanche Fuji Faucet:** [Get testnet AVAX](https://faucet.avax.network/)
-- **Core Wallet:** [Download Core](https://core.app/)
-- **MetaMask Setup:** [Add Avalanche Network](https://support.avax.network/en/articles/4626956-how-do-i-set-up-metamask-on-avalanche)
 
