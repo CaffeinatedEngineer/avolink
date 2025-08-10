@@ -6,6 +6,7 @@ import EngagementProgress from "@/components/engagement-progress"
 import HowItWorks from "@/components/how-it-works"
 import CreateEventDialog from "@/components/create-event-dialog"
 import ExploreEvents from "@/components/explore-events"
+import DynamicMarketplace from "@/components/dynamic-marketplace"
 import AnimatedSection from "@/components/animated-section"
 import ScrollToTop from "@/components/scroll-to-top"
 import { TypewriterEffect } from "@/components/ui/typewriter-effect"
@@ -165,6 +166,19 @@ export default function Page() {
       <section id="explore" className="mx-auto mt-16 max-w-6xl scroll-mt-24 px-6 pb-24 md:mt-20">
         <AnimatedSection animation="reveal-up" threshold={0.2}>
           <ExploreEvents />
+        </AnimatedSection>
+      </section>
+      
+      {/* Event Marketplace - Enhanced with Supabase */}
+      <section className="mx-auto mt-16 max-w-7xl scroll-mt-24 px-6 pb-24 md:mt-20">
+        <AnimatedSection animation="reveal-up" threshold={0.2}>
+          <div className="space-y-8">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold text-white mb-4">Event Marketplace</h2>
+              <p className="text-white/70 max-w-2xl mx-auto">Browse and purchase tickets for events directly on the blockchain</p>
+            </div>
+            <DynamicMarketplace />
+          </div>
         </AnimatedSection>
       </section>
 
