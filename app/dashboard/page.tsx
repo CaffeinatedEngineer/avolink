@@ -91,11 +91,20 @@ function DashboardCard({ title, value, description, icon: Icon, trend }: {
 }
 
 export default function Dashboard() {
-  const { isSignedIn, user } = useUser()
+  const { isSignedIn, user, isLoaded } = useUser()
   const { signOut } = useClerk()
   const walletAddress = useWalletAddress()
   const [activeTab, setActiveTab] = useState('marketplace')
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  // Wait for Clerk to load before making authentication decisions
+  if (!isLoaded) {
+    return (
+      <main className="relative min-h-screen flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </main>
+    )
+  }
 
   if (!isSignedIn) {
     redirect('/sign-in')

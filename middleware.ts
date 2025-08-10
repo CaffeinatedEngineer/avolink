@@ -1,16 +1,16 @@
 import { clerkMiddleware } from '@clerk/nextjs/server'
-import { updateSession } from './utils/supabase/middleware'
 import { NextRequest } from 'next/server'
 
-// Combined middleware for Clerk and Supabase
+// Use Clerk middleware with proper configuration
 export default clerkMiddleware(async (auth, request: NextRequest) => {
-  // Update Supabase session first
-  const supabaseResponse = await updateSession(request)
+  // Let Clerk handle authentication completely
+  // Remove Supabase middleware to prevent conflicts
   
-  // Clerk handles the rest of the auth flow
-  // You can add additional logic here if needed
-  
-  return supabaseResponse
+  // You can add custom logic here if needed
+  // For example, protecting specific routes:
+  // if (request.nextUrl.pathname.startsWith('/dashboard')) {
+  //   await auth.protect()
+  // }
 })
 
 export const config = {
