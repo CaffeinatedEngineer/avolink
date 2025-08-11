@@ -160,7 +160,7 @@ const walletProviders = {
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/avolink.git
+git clone https://github.com/CaffeinatedEngineer/avolink.git
 cd avolink
 
 # Install dependencies
